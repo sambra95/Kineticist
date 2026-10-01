@@ -1,0 +1,111 @@
+import numpy as np
+import pytest
+from conftest import T, curves, export_bytes
+
+from kineticist import analysis
+from kineticist.fitting import (FitSettings, describe_indices, fit_initial_rate, fit_points,
+                                why_no_fit)
+from kineticist.reader import WELLS, read_plate
+
+POS, NEG = ["A1", "A2", "A3"], ["A4", "A5", "A6"]
+
+
+def test_linear_trace_uses_every_reading():
+    a = 0.3 + 0.001 * T
+    f = fit_initial_rate(T, a)
+    assert f["status"] == "ok" and f["stopped_by"] == "end_of_trace"
+    assert f["n_points"] == len(T) and f["slope"] == pytest.approx(0.001)
+
+
+def test_slope_gate_stops_a_bending_trace_early():
+    a = 0.3 + 0.6 * (1 - np.exp(-0.001 * T / 0.6))
+    f = fit_initial_rate(T, a, FitSettings(slope_tol=0.05))
+    assert f["status"] == "ok" and f["stopped_by"] == "slope_drift"
+    assert f["slope"] >= 0.95 * f["slope_0"]
+    assert f["n_points"] < len(T)
+
+
+def test_slope_gate_holds_a_falling_trace_like_a_rising_one():
+    rise = 0.3 + 0.6 * (1 - np.exp(-0.001 * T / 0.6))
+    up, down = fit_initial_rate(T, rise), fit_initial_rate(T, 1.2 - rise)
+    assert down["stopped_by"] == "slope_drift" and down["n_points"] == up["n_points"]
+    assert down["slope"] == pytest.approx(-up["slope"])
+
+
+def test_flat_trace_has_no_linear_phase():
+    f = fit_initial_rate(T, np.full(len(T), 0.3))
+    assert f["status"] == "no_linear_fit" and np.isnan(f["r2"])
+
+
+def test_short_trace_is_insufficient():
+    a = 0.3 + 0.001 * T
+    a[3] = np.nan
+    assert fit_initial_rate(T, a)["status"] == "insufficient_data"
+
+
+def test_manual_fit_uses_exactly_the_chosen_points():
+    a = 0.3 + 0.001 * T
+    a[2] += 0.2                                   # an outlier, left out of the pick
+    f = fit_points(T, a, (0, 1, 3, 4, 5, 9))
+    assert f["idx"] == (0, 1, 3, 4, 5, 9) and f["status"] == "manual"
+    assert f["slope"] == pytest.approx(0.001) and f["r2"] == pytest.approx(1.0)
+
+
+def test_describe_indices():
+    assert describe_indices((0, 1, 2, 5, 6, 9)) == "0-2,5-6,9"
+    assert describe_indices(()) == ""
+
+
+def test_export_round_trip():
+    a = curves()
+    p = read_plate(export_bytes(a), "screen_EPI1.xlsx")
+    assert p.a.shape == (len(T), 96) and np.allclose(p.a, a)
+    assert np.allclose(p.t, T) and p.clock == "15:51:11"
+
+
+def test_build_fits_normalises_and_applies_overrides(plates):
+    autos = {n: analysis.auto_fits(p, FitSettings()) for n, p in plates.items()}
+    fits = analysis.build_fits(plates, autos, {}, POS, NEG)
+    assert len(fits) == 96 * len(plates)
+    pos = fits[fits.role == "positive"].groupby("plate", observed=True).vmax_norm.mean()
+    assert np.allclose(pos, 1.0)
+    assert (fits[fits.role == "negative"].status == "no_linear_fit").all()
+    assert (fits.vmax_norm_se.dropna() >= 0).all()
+
+    over = {("EPI1", "B7"): (0, 1, 2, 3)}
+    edited = analysis.build_fits(plates, autos, over, POS, NEG).set_index("label")
+    row = edited.loc["EPI1-B7"]
+    assert row.fit_source == "manual" and row.n_points == 4 and row.fit_points == "0-3"
+    assert row.vmax_auto == pytest.approx(fits.set_index("label").loc["EPI1-B7"].vmax)
+
+
+def test_summaries_run(plates):
+    autos = {n: analysis.auto_fits(p, FitSettings()) for n, p in plates.items()}
+    fits = analysis.build_fits(plates, autos, {}, POS, NEG)
+    ctrl = analysis.controls(fits)
+    assert (ctrl.zprime > 0.5).all()
+    ps = analysis.plate_summary(fits)
+    assert list(ps.index) == list(plates)
+    stats = analysis.batch_stats(fits)
+    assert np.isfinite(stats["cv_raw"]) and np.isfinite(stats["cv_norm"])
+    assert list(analysis.export_table(fits).columns) == analysis.COLUMNS
+    assert set(WELLS) == set(fits.well)
+
+
+def test_why_no_fit_names_the_check_and_a_passing_setting():
+    rng = np.random.default_rng(0)
+    noisy = 0.3 + 0.0002 * T + rng.normal(0, 0.002, len(T))
+    s = FitSettings()
+    assert fit_initial_rate(T, noisy, s)["status"] == "no_linear_fit"
+    why = why_no_fit(T, noisy, s)
+    assert why["check"] == "r2"
+    assert why["r2_max"] == pytest.approx(np.floor(why["r2_0"] * 1000) / 1000)
+    # each suggestion really does pass
+    assert fit_initial_rate(T, noisy, FitSettings(r2_threshold=why["r2_max"]))["status"] == "ok"
+    assert fit_initial_rate(T, noisy, FitSettings(min_points=why["window"][0]))["status"] == "ok"
+
+    assert why_no_fit(T, np.full(len(T), 0.3))["check"] == "flat"
+    short = 0.3 + 0.001 * T
+    short[3] = np.nan
+    why = why_no_fit(T, short)
+    assert why["check"] == "short" and why["n_available"] == 3 and why["window"][0] == 3

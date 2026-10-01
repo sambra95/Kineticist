@@ -1,0 +1,37 @@
+# Vivid violet on lavender-white, with bright status colours; the chart colours live in
+# kineticist/theme.py.
+[theme]
+base = "light"
+primaryColor = "#6741D9"
+backgroundColor = "#FAF8FF"
+secondaryBackgroundColor = "#F1ECFF"
+codeBackgroundColor = "#F1ECFF"
+textColor = "#1E1A2E"
+linkColor = "#6741D9"
+borderColor = "#D9D0FB"
+dataframeHeaderBackgroundColor = "#EDE7FF"
+showWidgetBorder = true
+baseRadius = "8px"
+buttonRadius = "8px"
+font = "'Inter':https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+baseFontSize = 14
+headingFontSizes = ["28px", "21px", "17px", "15px", "14px", "13px"]
+headingFontWeights = [600, 600, 600, 500, 500, 500]
+linkUnderline = false
+greenColor = "#12A150"
+orangeColor = "#E8590C"
+redColor = "#E03131"
+blueColor = "#1C7ED6"
+violetColor = "#6741D9"
+yellowColor = "#F59F00"
+
+[theme.sidebar]
+backgroundColor = "#EDE7FF"
+secondaryBackgroundColor = "#FFFFFF"
+borderColor = "#CFC3FA"
+
+[client]
+toolbarMode = "viewer"
+
+[server]
+maxUploadSize = 200

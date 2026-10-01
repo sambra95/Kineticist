@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" width="240" height="64">
+  <path d="M30 3 L55.1 17.5 L55.1 46.5 L30 61 L4.9 46.5 L4.9 17.5 Z" fill="#6741D9" stroke="#6741D9" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M11.8 42.5 L 48.2 21.5" stroke="#eb6834" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="41.7" cy="38.8" r="5.4" fill="#FFFFFF" fill-opacity="0.22"/><circle cx="30" cy="45.5" r="5.4" fill="#FFFFFF" fill-opacity="0.22"/>
+  <circle cx="18.3" cy="25.2" r="5.4" fill="#FFFFFF" fill-opacity="0.22"/><circle cx="30" cy="18.5" r="5.4" fill="#FFFFFF" fill-opacity="0.22"/>
+  <circle cx="18.3" cy="38.8" r="5.4" fill="#FBFAF7"/><circle cx="30" cy="32" r="5.4" fill="#FBFAF7"/><circle cx="41.7" cy="25.2" r="5.4" fill="#FBFAF7"/>
+  <text x="70" y="42" font-family="Inter, Helvetica, Arial, sans-serif" font-size="27" font-weight="600" fill="#1E1A2E">Kineticist</text>
+</svg>

@@ -1,0 +1,12 @@
+__pycache__/
+.pytest_cache/
+.venv/
+.DS_Store
+.streamlit/secrets.toml
+
+# Symlinks into the environment, created by Streamlit for its bundled agent skills.
+.claude/
+.agents/
+
+# Plate-reader exports stay out of the repo.
+*.xlsx

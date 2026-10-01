@@ -1,0 +1,21 @@
+[project]
+name = "kineticist"
+version = "0.1.0"
+description = "Initial rates from plate-reader kinetics, checked and corrected by eye"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # Top navigation, horizontal containers, button shortcuts and st.space are recent.
+    "streamlit>=1.64,<2",
+    "plotly>=5.24",
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "openpyxl>=3.1",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

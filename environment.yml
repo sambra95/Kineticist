@@ -1,0 +1,15 @@
+name: kineticist
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy>=1.26
+  - pandas>=2.2
+  - scipy>=1.11
+  - openpyxl>=3.1
+  - plotly>=5.24
+  - pytest
+  - pip
+  - pip:
+      # Recent: top navigation, horizontal containers, button shortcuts, st.space.
+      - streamlit>=1.64,<2
