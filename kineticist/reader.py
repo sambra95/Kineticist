@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 
@@ -41,6 +42,35 @@ def _seconds(v) -> float:
     return float(v)
 
 
+_COMMA_NUM = re.compile(r"^[+-]?\d+,\d+$")    # "0,234" / "30,9": decimal-comma text
+
+
+def _comma_decimal(rows) -> bool:
+    """True when the export was written on a decimal-comma locale.
+
+    Such exports store readings as text ("0,234") instead of numbers.
+    """
+    return any(isinstance(v, str) and _COMMA_NUM.match(v.strip())
+               for r in rows for v in r[2:])
+
+
+def _number(v, comma: bool) -> float | None:
+    """A reading as float, or None if it isn't one (blank, OVRFLW, ...).
+
+    In decimal-comma exports Excel sometimes reads "1,236" as one thousand two
+    hundred thirty-six (thousands grouping). That needs exactly three digits after a
+    non-zero leading digit, so it always lands at >= 1000, far above any real
+    absorbance or temperature: undo it.
+    """
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return v / 1000 if comma and abs(v) >= 1000 else float(v)
+    if comma and isinstance(v, str) and _COMMA_NUM.match(v.strip()):
+        return float(v.strip().replace(",", "."))
+    return None
+
+
 def _started(meta: dict) -> datetime | None:
     d, t = meta.get("Date"), meta.get("Time")
     if isinstance(t, time):
@@ -52,7 +82,8 @@ def _started(meta: dict) -> datetime | None:
 def read_plate(data: bytes, filename: str) -> Plate:
     """Parse one kinetic export: only the kinetic block and the read's start time are used.
 
-    OVRFLW -> NaN + saturated; empty cell -> NaN + missing.
+    OVRFLW -> NaN + saturated; empty cell -> NaN + missing. Both numeric exports and
+    decimal-comma text exports ("0,234") are accepted; the format is detected per file.
     """
     wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     try:
@@ -71,17 +102,24 @@ def read_plate(data: bytes, filename: str) -> Plate:
     cols = {j: name for j, name in enumerate(rows[hdr]) if j >= 3 and name in WELLS}
     slot = {j: WELLS.index(name) for j, name in cols.items()}
 
-    times, temps, vals, sat, miss = [], [], [], [], []
+    block = []
     for r in rows[hdr + 1:]:
         if len(r) < 4 or r[1] is None or r[3] is None:
             break                                   # end of the kinetic block
+        block.append(r)
+    comma = _comma_decimal(block)
+
+    times, temps, vals, sat, miss = [], [], [], [], []
+    for r in block:
         times.append(_seconds(r[1]))
-        temps.append(float(r[2]) if isinstance(r[2], (int, float)) else np.nan)
+        temp = _number(r[2], comma)
+        temps.append(np.nan if temp is None else temp)
         v_row, s_row, m_row = np.full(96, np.nan), np.zeros(96, bool), np.ones(96, bool)
         for j, k in slot.items():
             v = r[j] if j < len(r) else None
-            if isinstance(v, (int, float)):
-                v_row[k], m_row[k] = float(v), False
+            x = _number(v, comma)
+            if x is not None:
+                v_row[k], m_row[k] = x, False
             elif isinstance(v, str) and v.strip().upper().startswith("OVRFLW"):
                 s_row[k], m_row[k] = True, False
         vals.append(v_row); sat.append(s_row); miss.append(m_row)

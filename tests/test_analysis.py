@@ -63,6 +63,13 @@ def test_export_round_trip():
     assert np.allclose(p.t, T) and p.clock == "15:51:11"
 
 
+def test_decimal_comma_export():
+    a = curves()
+    a[:, 0] += 1.0                                  # A1 >= 1: thousands-grouped by Excel
+    p = read_plate(export_bytes(a, comma=True), "screen_EPI1.xlsx")
+    assert p.dropped == 0 and np.allclose(p.a, a) and np.allclose(p.temp, 29.4)
+
+
 def test_build_fits_normalises_and_applies_overrides(plates):
     autos = {n: analysis.auto_fits(p, FitSettings()) for n, p in plates.items()}
     fits = analysis.build_fits(plates, autos, {}, POS, NEG)

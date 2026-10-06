@@ -38,9 +38,18 @@ def make_plate(name="EPI1", seed=0, scale=1.0, hour=15) -> Plate:
                  started=datetime(2026, 9, 11, hour, 0, 0))
 
 
-def export_bytes(a: np.ndarray) -> bytes:
+def export_bytes(a: np.ndarray, comma: bool = False) -> bytes:
     """A minimal kinetic export of absorbance matrix ``a`` (reads x 96), with the
-    instrument's own metadata and results, which the reader ignores."""
+    instrument's own metadata and results, which the reader ignores.
+
+    ``comma`` writes readings as decimal-comma text ("0,234"), as Gen5 does on such
+    locales; values >= 1 become thousands-grouped integers ("1,236" -> 1236), the way
+    Excel mangles them there."""
+    def cell(v):
+        if not comma:
+            return v
+        return round(v * 1000) if v >= 1 else f"{v:.3f}".replace(".", ",")
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.append(["Software Version", "3.18.17"])
@@ -51,7 +60,8 @@ def export_bytes(a: np.ndarray) -> bytes:
     ws.append([None, "Time", "T° 340", *WELLS])
     for i, row in enumerate(a):
         s = int(T[i])
-        ws.append([None, time(s // 3600, s % 3600 // 60, s % 60), 29, *row.tolist()])
+        ws.append([None, time(s // 3600, s % 3600 // 60, s % 60), cell(29.4),
+                   *map(cell, row.tolist())])
     ws.append([])
     ws.append(["Results"])
     ws.append([None, None, *range(1, 13)])
