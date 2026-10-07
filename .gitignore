@@ -10,3 +10,7 @@ __pycache__/
 
 # Plate-reader exports stay out of the repo.
 *.xlsx
+
+# Output of macos_install/make_dist.sh.
+dist/
+build/

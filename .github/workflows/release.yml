@@ -1,0 +1,42 @@
+# Push a tag, get a release: the bundle is built on a runner and attached to it.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # Rebuild a tag that already exists, without having to move it.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to build
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    # Apple silicon, which is what the bundle is built for.
+    runs-on: macos-15
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Build
+        run: ./macos_install/make_dist.sh --version "${TAG#v}" --xz
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" --title "Kineticist ${TAG#v}" --generate-notes \
+            || echo "Release exists; replacing its archives."
+          gh release upload "$TAG" \
+            dist/Kineticist-macos-arm64.dmg dist/Kineticist-macos-arm64.tar.xz --clobber
