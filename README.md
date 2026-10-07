@@ -1,42 +1,9 @@
 # Kineticist
 
 Initial rates ("V<sub>max</sub>") from kinetic plate reads, with every
-fit visible and correctable by hand. Built for NADP<sup>+</sup> → NADPH lysate screens
-followed at A<sub>340</sub>, but any kinetic export in the same layout works.
+fit visible and correctable by hand.
 
-[![Download Kineticist for macOS](https://img.shields.io/github/v/release/sambra95/Kineticist?display_name=tag&style=for-the-badge&logo=apple&logoColor=white&label=Download%20for%20macOS&color=6741D9)](https://github.com/sambra95/Kineticist/releases/latest/download/Kineticist-macos-arm64.dmg)
-
-**macOS** - open the disk image. A window appears with **Kineticist** beside the
-Applications folder: drag one onto the other. The first launch needs
-right-click → Open, because the bundle is ad-hoc signed rather than notarised.
-Apple silicon only.
-
-The app carries its own Python, so nothing else needs installing. It opens in your
-browser and quits about thirty seconds after you close the last tab. Plates are held
-in memory only, so nothing is kept between runs; the log is in
-`~/Library/Logs/Kineticist`.
-
-## Run it from a checkout
-
-```bash
-conda env create -f environment.yml     # once
-conda activate kineticist
-streamlit run app.py
-```
-
-or, with uv: `uv run streamlit run app.py`.
-
-## Release it
-
-Push a `v*` tag (`git tag v0.1.0 && git push origin v0.1.0`) and
-[release.yml](.github/workflows/release.yml) builds the app on a macOS runner and
-attaches `Kineticist-macos-arm64.dmg` to a GitHub release, which is what the button
-above downloads. `./macos_install/make_dist.sh` builds the same bundle locally into
-`dist/`.
-
-Drop one kinetic `.xlsx` export per plate into the sidebar. Plates are named **Plate 1**,
-**Plate 2**, … in the order they were uploaded, and can be renamed there. Control wells
-(default A1–A3 positive, A4–A6 no-enzyme) and the fit settings are set in the sidebar too.
+[![Download Kineticist for macOS](https://img.shields.io/github/v/release/sambra95/Kineticist?display_name=tag&style=for-the-badge&logo=apple&logoColor=white&label=Download%20for%20macOS&color=6741D9&cacheSeconds=3600)](https://github.com/sambra95/Kineticist/releases/latest/download/Kineticist-macos-arm64.dmg)
 
 ## The pages
 
