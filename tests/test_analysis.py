@@ -76,7 +76,9 @@ def test_build_fits_normalises_and_applies_overrides(plates):
     assert len(fits) == 96 * len(plates)
     pos = fits[fits.role == "positive"].groupby("plate", observed=True).vmax_norm.mean()
     assert np.allclose(pos, 1.0)
-    assert (fits[fits.role == "negative"].status == "no_linear_fit").all()
+    neg = fits[fits.role == "negative"]
+    assert (neg.status == "no_linear_fit").all() and neg.vmax.isna().all()
+    assert neg.vmax_norm.isna().all() and neg.line_rate.notna().all()
     assert (fits.vmax_norm_se.dropna() >= 0).all()
 
     over = {("EPI1", "B7"): (0, 1, 2, 3)}
@@ -84,6 +86,20 @@ def test_build_fits_normalises_and_applies_overrides(plates):
     row = edited.loc["EPI1-B7"]
     assert row.fit_source == "manual" and row.n_points == 4 and row.fit_points == "0-3"
     assert row.vmax_auto == pytest.approx(fits.set_index("label").loc["EPI1-B7"].vmax)
+
+
+def test_no_fit_override_leaves_vmax_empty(plates):
+    autos = {n: analysis.auto_fits(p, FitSettings()) for n, p in plates.items()}
+    over = {("EPI1", "B7"): analysis.NO_FIT, ("EPI1", "A1"): analysis.NO_FIT}
+    fits = analysis.build_fits(plates, autos, over, POS, NEG).set_index("label")
+    row = fits.loc["EPI1-B7"]
+    assert row.status == "excluded" and row.fit_source == "manual" and row.n_points == 0
+    assert np.isnan(row.vmax) and np.isnan(row.se) and np.isnan(row.vmax_norm)
+    assert np.isfinite(row.vmax_auto)
+    ctrl = analysis.controls(fits.reset_index())
+    assert ctrl.loc["EPI1", "n_pos"] == 2 and np.isfinite(ctrl.loc["EPI1", "pos_mean"])
+    ps = analysis.plate_summary(fits.reset_index())
+    assert ps.loc["EPI1", "n_no_fit"] == 1 and ps.loc["EPI1", "n_manual"] == 0
 
 
 def test_summaries_run(plates):

@@ -41,7 +41,8 @@ LINE = "#eb6834"             # the fitted initial-rate line
 FIT_SHADE = {"ok": "#D3F5DF",                  # good: an automatic linear fit
              "manual": "#E2D9FF",              # fitted by hand (the violet accent, pale)
              "no_linear_fit": "#FFDCD6",       # bad: no linear phase
-             "insufficient_data": "#FFDCD6"}   # bad: too few readings
+             "insufficient_data": "#FFDCD6",   # bad: too few readings
+             "excluded": "#E6E4EC"}            # marked "no fit" by hand: no rate
 #: The open well's cell, tinted by Plotly in the browser when it is clicked.
 SELECTED = "rgba(103, 65, 217, 0.28)"
 #: ...and outlined only if it is a control.

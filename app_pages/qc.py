@@ -18,7 +18,8 @@ with st.container(horizontal=True):
     st.metric("Wells", len(fits), border=True)
     st.metric("Linear fit", int((fits.status == "ok").sum()), border=True)
     st.metric("No linear phase", int((fits.status == "no_linear_fit").sum()), border=True)
-    st.metric("Fitted by hand", int((fits.fit_source == "manual").sum()), border=True)
+    st.metric("Fitted by hand", int((fits.status == "manual").sum()), border=True)
+    st.metric("Marked no fit", int((fits.status == "excluded").sum()), border=True)
     st.metric("Z′ range", f"{ctrl.zprime.min():.2f} – {ctrl.zprime.max():.2f}"
               if ctrl.zprime.notna().any() else "–", border=True)
 
@@ -46,7 +47,7 @@ with st.container(border=True):
     st.plotly_chart(plots.controls_by_plate(fits, list(d.plates),
                                             {p: v.clock for p, v in d.plates.items()}),
                     key="controls")
-    neg = fits[fits.role == "negative"].vmax
+    neg = fits[fits.role == "negative"].line_rate
     if len(neg) and ctrl.pos_mean.notna().any():
         st.caption(f"Negative controls: mean {neg.mean():+.5f}, largest |rate| "
                    f"{neg.abs().max():.5f} ΔA₃₄₀/min "

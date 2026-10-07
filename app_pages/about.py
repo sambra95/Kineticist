@@ -44,16 +44,20 @@ with st.container(border=True):
     st.markdown("""
 - **Click a well** on the plate grid to open it beside the grid.
 - **Lasso or box-select readings** on the open well's curve to refit its rate through
-  exactly those points. The reset button beside the well's status puts the automatic
-  fit back.
+  exactly those points. The no-fit button marks a well as having no rate: its V-max
+  is left empty (NaN) in every table and export, and it drops out of the control
+  means. The reset button beside the well's status puts the automatic fit back.
 - **On the grid**, each cell is shaded by how its fit went: green for a linear fit,
-  violet for a manual fit, red for no linear phase or too few readings. Positive
+  violet for a manual fit, red for no linear phase or too few readings, grey for a
+  well marked no fit. Positive
   controls are outlined green, negative controls orange.
 - **On both plots**, grey points are readings, blue points are readings used in the
   fit, and the orange line is the fitted rate: dashed where the well has no linear
   phase. On a manual fit, the automatic fit is drawn dashed in grey for comparison.
 - A failed automatic fit names the check it failed in its status badge, for example
-  the R² of the initial window against the minimum.
+  the R² of the initial window against the minimum. Like a well marked no fit, it has
+  no rate: its V-max is left empty (NaN). The control statistics and Z′ still use each
+  control's measured slope, since a no-enzyme control has no linear phase by design.
 """)
 
 with st.container(border=True):
@@ -97,7 +101,8 @@ with st.container(border=True):
     st.subheader("Export", anchor=False)
     st.markdown("""
 - Rates are in ΔA<sub>340</sub> min<sup>−1</sup>.
-- `fit_source` is `manual` where you lassoed the fit, `vmax_auto` keeps the automatic
+- `fit_source` is `manual` where you lassoed the fit or marked the well no fit
+  (`status` `excluded`, with empty `vmax`); `vmax_auto` keeps the automatic
   rate beside it, and `fit_points` lists the readings used (0 = first read).
 - The fit settings are carried as the last three columns.
 - The filters change the preview only; a download is always every well.

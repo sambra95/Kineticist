@@ -18,7 +18,8 @@ st.session_state.setdefault("well", "A1")
 STATUS = {"ok": ("Linear fit", "green", ":material/check:"),
           "manual": ("Manual fit", "violet", ":material/edit:"),
           "no_linear_fit": ("No linear phase", "orange", ":material/warning:"),
-          "insufficient_data": ("Too few readings", "red", ":material/error:")}
+          "insufficient_data": ("Too few readings", "red", ":material/error:"),
+          "excluded": ("No fit", "gray", ":material/block:")}
 
 #: role -> suffix in the well picker (a sample needs none)
 ROLE = {"positive": "· +ctrl", "negative": "· −ctrl", "sample": ""}
@@ -90,6 +91,7 @@ def workspace() -> None:
     f = by_well.loc[well]
     nonce = st.session_state.nonce
     manual = f.fit_source == "manual"
+    excluded = f.status == "excluded"
     j = WELLS.index(well)
 
     # Plate and well side by side, each card a one-row header of controls over its
@@ -119,9 +121,13 @@ def workspace() -> None:
                          format_func=lambda w: f"{w} {ROLE[by_well.role[w]]}".strip())
             st.badge(label, icon=icon, color=colour)
             st.space("stretch")
+            st.button("", icon=":material/block:", disabled=excluded,
+                      on_click=session.set_no_fit, args=(plate, well),
+                      help="No fit: this well has no rate (V-max is left empty)")
             st.button("", icon=":material/restart_alt:", disabled=not manual,
                       on_click=session.clear_override, args=(plate, well),
-                      help="Automatic fit: discard the manual fit for this well")
+                      help="Automatic fit: discard the manual fit or no-fit mark "
+                           "for this well")
         auto = session.autos(d)[plate][j] if manual else None
         lkey = f"lasso-{plate}-{well}-{nonce}"
         st.plotly_chart(plots.well_fit(d.plates[plate], j, f, auto,
@@ -130,10 +136,12 @@ def workspace() -> None:
                         selection_mode=("lasso", "box"), config=WELL_CONFIG)
         (vmax, norm), (r2, n) = (st.columns(2, gap="xsmall", border=True) for _ in "ab")
         stat(vmax, "V-max, ΔA₃₄₀/min", fmt(f.vmax, "+.4f"),
-             f"{f.vmax - f.vmax_auto:+.4f} vs auto" if manual else None)
+             f"{f.vmax - f.vmax_auto:+.4f} vs auto"
+             if manual and np.isfinite(f.vmax - f.vmax_auto) else None)
         stat(norm, "Normalised to +ctrl", fmt(f.vmax_norm, ".3f"))
         stat(r2, "R²", fmt(f.r2, ".4f"))
-        stat(n, "Readings in fit", f"{f.n_points} to {fmt(f.t_end_s, '.0f')} s")
+        stat(n, "Readings in fit",
+         f"{f.n_points} to {fmt(f.t_end_s, '.0f')} s" if f.n_points else "–")
 
 
 workspace()

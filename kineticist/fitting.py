@@ -132,6 +132,12 @@ def fit_points(t: np.ndarray, a: np.ndarray, idx: tuple[int, ...]) -> dict:
                    np.nan, _leading_valid(a), len(a))
 
 
+def no_fit(a: np.ndarray) -> dict:
+    """A well marked by hand as having no rate: every fitted value is NaN."""
+    return _result(np.nan, np.nan, np.nan, np.nan, (), "excluded", "excluded",
+                   np.nan, _leading_valid(a), len(a))
+
+
 def describe_indices(idx: tuple[int, ...]) -> str:
     """Compact run-length text for a set of reading indices: (0,1,2,5,6) -> '0-2,5-6'."""
     if not idx:

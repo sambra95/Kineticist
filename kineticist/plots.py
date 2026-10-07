@@ -22,7 +22,8 @@ def hover_text(d: pd.DataFrame) -> pd.Series:
     r2 = d.r2.map(lambda v: f"{v:.4f}" if np.isfinite(v) else "undefined (flat)")
     norm = d.vmax_norm.map(lambda v: f"{v:.3f}" if np.isfinite(v) else "–")
     return ("<b>" + d.label + "</b>  " + d.role + "<br>"
-            + "V<sub>max</sub>  " + d.vmax.map("{:+.4f}".format) + " ΔA340/min<br>"
+            + "V<sub>max</sub>  " + d.vmax.map(lambda v: f"{v:+.4f}" if np.isfinite(v) else "–")
+            + " ΔA340/min<br>"
             + "norm  " + norm + " × plate +ctrl<br>"
             + "R²  " + r2 + "<br>"
             + "window  " + d.n_points.astype(str) + " pts to "
@@ -95,9 +96,9 @@ def plate_grid(plate: Plate, d: pd.DataFrame, selected: str | None = None,
             if idx and accepted:
                 used = _thin(idx, GRID_POINTS // 2)
                 fx += list(px(t[used])); fy += list(py(a[used]))
-            if idx and np.isfinite(f.vmax):
+            if idx and np.isfinite(f.line_rate):
                 ends = np.array([plate.t[min(idx)], plate.t[max(idx)]])
-                line = f.vmax / 60 * ends + f.intercept
+                line = f.line_rate / 60 * ends + f.intercept
                 lx, ly = ok_l if accepted else bad_l
                 lx += list(px(ends / t_max)) + [None]
                 ly += list(py(line)) + [None]
@@ -169,9 +170,9 @@ def well_fit(plate: Plate, j: int, f: pd.Series, auto: dict | None = None,
     if auto is not None and auto["idx"] and np.isfinite(auto["slope"]):
         add_line(auto["slope"] * 60, auto["intercept"], auto["idx"], "automatic fit",
                  th.INK2, "dash", 1.5, extend=False)
-    if f.idx and np.isfinite(f.vmax):
+    if f.idx and np.isfinite(f.line_rate):
         accepted = f.status in ACCEPTED
-        add_line(f.vmax, f.intercept, f.idx,
+        add_line(f.line_rate, f.intercept, f.idx,
                  "manual fit" if f.fit_source == "manual" else
                  ("fitted rate" if accepted else "5-point slope (no linear phase)"),
                  th.LINE, "solid" if accepted else "dash", 2.5)
@@ -234,8 +235,9 @@ def controls_by_plate(fits: pd.DataFrame, plates: list[str], clocks: dict[str, s
     fig = go.Figure()
     for role, c in (("positive", th.POS), ("negative", th.NEG)):
         d = fits[fits.role == role]
-        fig.add_trace(_box(d.plate.astype(str), d.vmax, th.ROLE_LAB[role], c, hover_text(d), 8))
-    pos = fits[fits.role == "positive"].groupby("plate", observed=True).vmax.mean().mean()
+        fig.add_trace(_box(d.plate.astype(str), d.line_rate, th.ROLE_LAB[role], c,
+                           hover_text(d), 8))
+    pos = fits[fits.role == "positive"].groupby("plate", observed=True).line_rate.mean().mean()
     if np.isfinite(pos):
         fig.add_hline(y=pos, line=dict(color=th.POS, width=1.2, dash="dash"),
                       annotation_text=f"grand +ctrl mean {pos:.3f}",

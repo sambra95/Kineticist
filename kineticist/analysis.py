@@ -6,11 +6,17 @@ import numpy as np
 import pandas as pd
 from scipy.stats import kruskal, mannwhitneyu
 
-from .fitting import FitSettings, describe_indices, fit_initial_rate, fit_points
+from .fitting import FitSettings, describe_indices, fit_initial_rate, fit_points, no_fit
 from .reader import COLS, ROWS, WELLS, Plate
 
 #: Fit statuses whose rate is a validated linear-phase estimate.
 ACCEPTED = ("ok", "manual")
+
+#: Fit statuses set by hand rather than by the automatic fit.
+BY_HAND = ("manual", "excluded")
+
+#: The override that marks a well "no fit": its rate is NaN.
+NO_FIT: tuple[int, ...] = ()
 
 #: Per-well export columns, in order; the rest of the per-well table stays internal.
 COLUMNS = ["label", "plate", "well", "row", "col", "role",
@@ -28,15 +34,20 @@ def auto_fits(plate: Plate, settings: FitSettings) -> list[dict]:
 def _row(name: str, plate: Plate, j: int, fit: dict, auto: dict, role: str) -> dict:
     well, idx = WELLS[j], fit["idx"]
     a = plate.a[:, j]
+    # Only a fit that passed its checks has a rate; a failed one keeps its line's slope
+    # (for drawing, and for the control statistics) but reports NaN.
+    rate = fit["status"] in ACCEPTED
     return dict(
         label=f"{name}-{well}", plate=name, well=well, row=well[0], col=int(well[1:]),
         role=role, clock=plate.clock,
-        vmax=fit["slope"] * 60, se=fit["se"] * 60, intercept=fit["intercept"],
+        vmax=fit["slope"] * 60 if rate else np.nan, se=fit["se"] * 60 if rate else np.nan,
+        line_rate=fit["slope"] * 60, intercept=fit["intercept"],
         r2=fit["r2"], n_points=fit["n_points"],
         t_end_s=plate.t[max(idx)] if idx else np.nan,
-        fit_source="manual" if fit["status"] == "manual" else "auto",
+        fit_source="manual" if fit["status"] in BY_HAND else "auto",
         fit_points=describe_indices(idx), idx=idx,
-        vmax_auto=auto["slope"] * 60, vmax_initial=auto["slope_0"] * 60,
+        vmax_auto=auto["slope"] * 60 if auto["status"] in ACCEPTED else np.nan,
+        vmax_initial=auto["slope_0"] * 60,
         stopped_by=fit["stopped_by"], status=fit["status"],
         n_available=fit["n_available"], n_timepoints=fit["n_timepoints"],
         a_start=a[0], a_max=np.nanmax(a) if np.isfinite(a).any() else np.nan,
@@ -48,7 +59,10 @@ def _row(name: str, plate: Plate, j: int, fit: dict, auto: dict, role: str) -> d
 def build_fits(plates: dict[str, Plate], autos: dict[str, list[dict]],
                overrides: dict[tuple[str, str], tuple[int, ...]],
                pos_wells: list[str], neg_wells: list[str]) -> pd.DataFrame:
-    """One row per (plate, well): the automatic fit, or the manual one where set."""
+    """One row per (plate, well): the automatic fit, or the manual one where set.
+
+    An override is the readings to fit through, or ``NO_FIT`` for a well with no rate.
+    """
     role = {w: "positive" if w in pos_wells else "negative" if w in neg_wells
             else "sample" for w in WELLS}
     records = []
@@ -56,7 +70,8 @@ def build_fits(plates: dict[str, Plate], autos: dict[str, list[dict]],
         for j, well in enumerate(WELLS):
             auto = autos[name][j]
             idx = overrides.get((name, well))
-            fit = fit_points(plate.t, plate.a[:, j], idx) if idx else auto
+            fit = (auto if idx is None else no_fit(plate.a[:, j]) if idx == NO_FIT
+                   else fit_points(plate.t, plate.a[:, j], idx))
             records.append(_row(name, plate, j, fit, auto, role[well]))
 
     fits = pd.DataFrame(records)
@@ -84,10 +99,14 @@ def zprime(pos: pd.Series, neg: pd.Series) -> float:
 
 
 def controls(fits: pd.DataFrame) -> pd.DataFrame:
-    """Per-plate control statistics and Z'."""
+    """Per-plate control statistics and Z'.
+
+    From each control's measured slope, failed fit or not: a no-enzyme control has no
+    linear phase by design. Only wells marked no fit by hand drop out.
+    """
     out = {}
     for p, d in fits.groupby("plate", observed=True):
-        pos, neg = d[d.role == "positive"].vmax, d[d.role == "negative"].vmax
+        pos, neg = d[d.role == "positive"].line_rate, d[d.role == "negative"].line_rate
         out[p] = dict(clock=d.clock.iloc[0], n_pos=pos.count(), n_neg=neg.count(),
                       pos_mean=pos.mean(), pos_sd=pos.std(ddof=1),
                       neg_mean=neg.mean(), neg_sd=neg.std(ddof=1),
@@ -124,7 +143,7 @@ def plate_summary(fits: pd.DataFrame) -> pd.DataFrame:
         "med_raw": g.vmax.median(), "med_norm": g.vmax_norm.median(),
         "iqr_raw": g.vmax.quantile(.75) - g.vmax.quantile(.25),
         "n_no_fit": smp[~smp.status.isin(ACCEPTED)].groupby("plate", observed=True).size(),
-        "n_manual": fits[fits.fit_source == "manual"].groupby("plate", observed=True).size(),
+        "n_manual": fits[fits.status == "manual"].groupby("plate", observed=True).size(),
     }).reindex(ctrl.index).fillna({"n_no_fit": 0, "n_manual": 0})
     return ctrl.join(out)
 

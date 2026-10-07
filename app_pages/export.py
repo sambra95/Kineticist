@@ -24,7 +24,7 @@ plates.download_button("Plate summary", summary.to_csv().encode(),
                        f"{stem}_plate_summary.csv", "text/csv",
                        icon=":material/download:", width="stretch")
 
-show = st.pills("Show", ["Samples", "Controls", "No linear phase", "Manual fits"],
+show = st.pills("Show", ["Samples", "Controls", "No linear phase", "Manual fits", "No fit"],
                 selection_mode="multi", key="export_filter",
                 help="Filters the preview only; the download is always every well.")
 
@@ -36,7 +36,9 @@ if "Controls" in show and "Samples" not in show:
 if "No linear phase" in show:
     view = view[view.status == "no_linear_fit"]
 if "Manual fits" in show:
-    view = view[view.fit_source == "manual"]
+    view = view[view.status == "manual"]
+if "No fit" in show:
+    view = view[view.status == "excluded"]
 
 st.dataframe(
     view, hide_index=True, height=560,

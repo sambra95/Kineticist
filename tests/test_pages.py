@@ -35,6 +35,18 @@ def test_fits_page_shows_a_manual_fit(plates):
     assert any("vs auto" in m.value for m in at.markdown)
 
 
+def test_fits_page_marks_a_well_no_fit(plates):
+    at = run("fits", plates)
+    at.session_state["well"] = "B1"
+    at.run()
+    at.button[0].click().run()                 # the no-fit button
+    assert not at.exception, at.exception
+    assert at.session_state["overrides"] == {("EPI1", "B1"): ()}
+    assert any("No fit" in m.value for m in at.markdown)
+    at.button[1].click().run()                 # reset: back to the automatic fit
+    assert at.session_state["overrides"] == {}
+
+
 def test_a_failed_fit_names_its_check(plates):
     at = run("fits", plates)
     at.session_state["well"] = "A4"            # a no-enzyme control: no linear phase

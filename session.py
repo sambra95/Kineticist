@@ -28,7 +28,8 @@ class Data:
 
 def init() -> None:
     """All session state, initialised in one place."""
-    st.session_state.setdefault("overrides", {})   # (plate, well) -> reading indices
+    st.session_state.setdefault("overrides", {})   # (plate, well) -> reading indices,
+                                                   # or analysis.NO_FIT
     st.session_state.setdefault("nonce", 0)        # bumped to reset a chart's selection
     st.session_state.setdefault("data", None)
     st.session_state.setdefault("plate_names", {})  # uploaded file id -> plate name
@@ -58,6 +59,11 @@ def fits(d: Data) -> pd.DataFrame:
 # ---------------------------------------------------------------- manual fits
 def set_override(plate: str, well: str, idx: tuple[int, ...]) -> None:
     st.session_state.overrides[(plate, well)] = idx
+
+
+def set_no_fit(plate: str, well: str) -> None:
+    st.session_state.overrides[(plate, well)] = analysis.NO_FIT
+    st.session_state.nonce += 1
 
 
 def clear_override(plate: str, well: str) -> None:
