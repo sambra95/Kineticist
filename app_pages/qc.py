@@ -29,7 +29,7 @@ if fits.saturated.any():
                icon=":material/warning:")
 if (fits.status == "insufficient_data").any():
     st.warning(f"{int((fits.status == 'insufficient_data').sum())} wells have fewer "
-               f"readings than the {d.settings.min_points}-point initial window.",
+               f"readings than the {d.settings.min_points}-point shortest window.",
                icon=":material/warning:")
 
 with st.container(border=True):
@@ -74,7 +74,7 @@ with st.container(border=True):
         drop = 100 * (1 - bound.vmax / bound.vmax_initial)
         st.caption(f"The slope gate ended the window on {len(bound)} wells, holding them "
                    f"to a median {drop.median():.1f} % (max {drop.max():.1f} %) below their "
-                   f"{d.settings.min_points}-point slope. Window lengths: "
+                   f"steepest-window rate. Window lengths: "
                    f"{ok.n_points.min()}–{ok.n_points.max()} readings "
                    f"(median {ok.n_points.median():.0f}).")
 

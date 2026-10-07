@@ -16,13 +16,14 @@ with st.container(border=True):
 start of the trace. No substrate titration is involved, so it carries no
 *k*<sub>cat</sub> or *K*<sub>M</sub> meaning.
 
-1. Fit the first **{s.min_points}** readings. Their slope is the reference rate.
-2. Add one reading at a time while the fit keeps **R² ≥ {s.r2_threshold:.3f}** *and*
-   its rate falls no more than **{s.slope_tol:.0%}** below the reference, for rising
-   and falling traces alike.
-3. The largest window passing both gives V<sub>max</sub>.
-4. If the first window already fails R², the well has **no linear phase**. Its
-   {s.min_points}-point slope is still reported, but flagged.
+1. Slide windows of **{s.min_points}** to **{2 * s.min_points}** readings across the
+   trace and fit each one (a rolling slope).
+2. Keep the windows with **R² ≥ {s.r2_threshold:.3f}**. The steepest of them, rising
+   or falling, is the reference rate.
+3. The longest kept window whose rate is no more than **{s.slope_tol:.0%}** below the
+   reference gives V<sub>max</sub>.
+4. If no window passes R², the well has **no linear phase**. The slope of its first
+   {s.min_points} readings is still reported, but flagged.
 
 The slope gate keeps the window in the linear phase: these curves bend while
 R² is still above 0.99. A **manual fit** is a straight line through exactly the

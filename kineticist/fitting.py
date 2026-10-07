@@ -1,11 +1,12 @@
 """Initial-rate ("V-max") fitting of a single progress curve.
 
-The automatic fit starts from the first ``min_points`` readings and extends the
-window one point at a time for as long as it keeps R2 >= ``r2_threshold`` AND
-keeps the rate from falling more than ``slope_tol`` below the initial-window rate,
-in whichever direction the trace runs. The slope gate is what holds the window to
-the linear phase: these curves bend while cumulative R2 stays above 0.99, so R2
-alone over-runs into substrate depletion.
+The automatic fit is a rolling slope: windows of every length from ``min_points``
+to twice that slide across the trace, and each gets a least-squares slope. Windows
+with R2 < ``r2_threshold`` are dropped; the steepest survivor, in whichever direction
+the trace runs, is the reference rate. The fit reported is the longest surviving
+window whose rate is no more than ``slope_tol`` below the reference: the extra
+readings steady the slope, and the slope gate holds them to the linear phase (these
+curves bend while R2 stays above 0.99, so R2 alone over-runs into substrate depletion).
 
 A manual fit is an ordinary least-squares line through exactly the readings
 the user picked.
@@ -25,9 +26,9 @@ R2_RANGE = (0.5, 0.999)
 
 @dataclass(frozen=True)
 class FitSettings:
-    min_points: int = 5        # initial window; its slope is the reference rate
-    r2_threshold: float = 0.95  # gate 1: extend while R2 stays at or above this
-    slope_tol: float = 0.05     # gate 2: and while the rate falls no more than this fraction
+    min_points: int = 5        # shortest sliding window; the longest is twice this
+    r2_threshold: float = 0.95  # gate 1: a window counts only with R2 at or above this
+    slope_tol: float = 0.05     # gate 2: and with its rate no more than this below the steepest
 
 
 def ols(x: np.ndarray, y: np.ndarray) -> tuple[float, float, float, float]:
@@ -57,6 +58,34 @@ def ols(x: np.ndarray, y: np.ndarray) -> tuple[float, float, float, float]:
     return slope, intercept, r2, se
 
 
+def _rolling(x: np.ndarray, y: np.ndarray, n: int) -> tuple[np.ndarray, np.ndarray]:
+    """Slope and R2 of every ``n``-point window, element for element what :func:`ols` gives."""
+    xw = np.lib.stride_tricks.sliding_window_view(x, n)
+    yw = np.lib.stride_tricks.sliding_window_view(y, n)
+    xc = xw - xw.mean(axis=1, keepdims=True)
+    yc = yw - yw.mean(axis=1, keepdims=True)
+    sxx = (xc * xc).sum(axis=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        slope = np.where(sxx > 0, (xc * yc).sum(axis=1) / sxx, np.nan)
+        ss_res = ((yc - slope[:, None] * xc) ** 2).sum(axis=1)
+        ss_tot = (yc * yc).sum(axis=1)
+        noise_floor = 16 * n * (np.finfo(float).eps
+                                * np.maximum(np.abs(yw).max(axis=1), 1e-12)) ** 2
+        r2 = np.where(ss_tot > noise_floor, 1 - ss_res / ss_tot, np.nan)
+    return slope, r2
+
+
+def _windows(t: np.ndarray, a: np.ndarray, m: int, n_avail: int) -> dict:
+    """Rolling slope and R2 for each window length ``m``..``2m`` that fits the readings."""
+    return {n: _rolling(t[:n_avail], a[:n_avail], n) for n in range(m, min(2 * m, n_avail) + 1)}
+
+
+def _best_r2(scan: dict) -> float:
+    """The highest R2 of any window in a scan; NaN if every window is flat."""
+    r2 = np.concatenate([r for _, r in scan.values()]) if scan else np.array([])
+    return float(np.nanmax(r2)) if np.isfinite(r2).any() else np.nan
+
+
 def _leading_valid(a: np.ndarray) -> int:
     """Readings before the first missing or saturated one."""
     bad = ~np.isfinite(a)
@@ -72,51 +101,68 @@ def _result(slope, intercept, r2, se, idx, stopped_by, status, slope_0, n_avail,
 
 
 def fit_initial_rate(t: np.ndarray, a: np.ndarray, s: FitSettings = FitSettings()) -> dict:
-    """Automatic initial rate. ``status`` is ok / no_linear_fit / insufficient_data."""
+    """Automatic initial rate. ``status`` is ok / no_linear_fit / insufficient_data.
+
+    ``slope_0`` is the reference rate, the steepest window passing R2. ``stopped_by``
+    says why the window is no longer: ``end_of_trace`` (it spans every valid reading),
+    ``max_window`` (it is the longest window tried), ``slope_drift`` (a longer window
+    passes R2 but not the slope gate) or ``r2`` (no longer window passes R2).
+    """
     n_avail, n_tp, m = _leading_valid(a), len(a), s.min_points
 
     if n_avail < m:
         return _result(np.nan, np.nan, np.nan, np.nan, (), "no_data",
                        "insufficient_data", np.nan, n_avail, n_tp)
 
-    slope_0, intercept_0, r2_0, se_0 = ols(t[:m], a[:m])
-    if not (r2_0 >= s.r2_threshold):             # NaN-safe: undefined R2 fails too
+    scan = _windows(t, a, m, n_avail)
+    passing = {n: r2 >= s.r2_threshold for n, (_, r2) in scan.items()}  # NaN fails too
+    if not any(p.any() for p in passing.values()):
+        # No linear stretch anywhere: report the first window's line, flagged.
+        slope_0, intercept_0, r2_0, se_0 = ols(t[:m], a[:m])
         return _result(slope_0, intercept_0, r2_0, se_0, range(m), "r2_at_start",
                        "no_linear_fit", slope_0, n_avail, n_tp)
 
-    best, stopped_by = (slope_0, intercept_0, r2_0, se_0, m), "end_of_trace"
+    # The trace runs the way of its steepest linear stretch; that rate is the reference.
+    rates = np.concatenate([scan[n][0][p] for n, p in passing.items()])
+    slope_0 = rates[np.argmax(np.abs(rates))]
     sign, floor = np.sign(slope_0), (1 - s.slope_tol) * abs(slope_0)
-    for n in range(m + 1, n_avail + 1):
-        slope, intercept, r2, se = ols(t[:n], a[:n])
-        if not (r2 >= s.r2_threshold):
-            stopped_by = "r2"; break
-        if sign * slope < floor:
-            stopped_by = "slope_drift"; break
-        best = (slope, intercept, r2, se, n)
 
-    slope, intercept, r2, se, n = best
-    return _result(slope, intercept, r2, se, range(n), stopped_by, "ok",
+    # Longest window passing both gates; the steepest of that length, then the earliest.
+    both = {n: np.where(p & (sign * scan[n][0] >= floor), sign * scan[n][0], -np.inf)
+            for n, p in passing.items()}
+    n = max(n for n, rate in both.items() if np.isfinite(rate).any())
+    start = int(np.argmax(both[n]))
+
+    longer = [k for k in passing if k > n]
+    stopped_by = ("end_of_trace" if n == n_avail else "max_window" if not longer
+                  else "slope_drift" if any(passing[k].any() for k in longer) else "r2")
+    idx = range(start, start + n)
+    slope, intercept, r2, se = ols(t[idx.start:idx.stop], a[idx.start:idx.stop])
+    return _result(slope, intercept, r2, se, idx, stopped_by, "ok",
                    slope_0, n_avail, n_tp)
 
 
 def why_no_fit(t: np.ndarray, a: np.ndarray, s: FitSettings = FitSettings()) -> dict:
     """Which check an automatic fit failed, and the nearest settings that pass it.
 
-    ``check`` is 'short' (fewer readings than the initial window before the trace is
-    cut by a missing or saturated reading), 'flat' (the initial window is constant to
-    the reader's resolution, so R2 is undefined) or 'r2' (its R2 is below the minimum).
-    ``window`` is the initial-window size, within MIN_POINTS_RANGE and nearest the
-    current one, whose R2 clears the current minimum, with that R2; None if none does.
-    ``r2_max`` is the highest minimum R2 the current window passes, or None if there is
-    none within R2_RANGE.
+    ``check`` is 'short' (fewer readings than the shortest window before the trace is
+    cut by a missing or saturated reading), 'flat' (every window is constant to the
+    reader's resolution, so R2 is undefined) or 'r2' (no window reaches the minimum R2).
+    ``r2_0`` is the best R2 of any window. ``window`` is the shortest-window size, within
+    MIN_POINTS_RANGE and nearest the current one, for which some window clears the
+    current minimum, with that window's R2; None if none does. ``r2_max`` is the highest
+    minimum R2 the current windows pass, or None if there is none within R2_RANGE.
     """
     n_avail, m = _leading_valid(a), s.min_points
-    r2_0 = ols(t[:m], a[:m])[2] if n_avail >= m else np.nan
+    r2_0 = _best_r2(_windows(t, a, m, n_avail)) if n_avail >= m else np.nan
     check = "short" if n_avail < m else "flat" if not np.isfinite(r2_0) else "r2"
 
     lo, hi = MIN_POINTS_RANGE
+    best = {n: _best_r2({n: _rolling(t[:n_avail], a[:n_avail], n)})
+            for n in range(lo, min(2 * hi, n_avail) + 1)}
     passing = [(n, r2) for n in range(lo, min(hi, n_avail) + 1)
-               if (r2 := ols(t[:n], a[:n])[2]) >= s.r2_threshold]
+               if (r2 := np.nanmax([best[k] for k in range(n, min(2 * n, n_avail) + 1)]
+                                   + [-np.inf])) >= s.r2_threshold]
     window = min(passing, key=lambda p: (abs(p[0] - m), p[0])) if passing else None
     r2_max = (np.floor(r2_0 * 1000) / 1000
               if np.isfinite(r2_0) and r2_0 >= R2_RANGE[0] else None)

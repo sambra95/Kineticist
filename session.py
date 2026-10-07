@@ -111,16 +111,15 @@ def sidebar() -> None:
             settings = FitSettings(
                 min_points=st.number_input(
                     "Initial window (points)", *MIN_POINTS_RANGE, 5, key="min_points",
-                    help="The fit starts on this many readings; their slope is the "
-                         "reference rate."),
+                    help="The shortest sliding window; the longest is twice this."),
                 r2_threshold=st.number_input(
                     "Minimum R²", *R2_RANGE, 0.95, 0.01, key="r2", format="%.3f",
-                    help="A reading joins the window only while R² stays at or above this."),
+                    help="A window counts only with R² at or above this."),
                 slope_tol=st.number_input(
                     "Slope tolerance", 0.01, 0.5, 0.05, 0.01, key="slope_tol",
                     format="%.2f",
-                    help="…and while the rate falls no more than this fraction below "
-                         "the initial-window rate."),
+                    help="The longest window whose rate is no more than this fraction "
+                         "below the steepest window's gives V-max."),
             )
 
     plates, errors = {}, []

@@ -10,25 +10,40 @@ from kineticist.reader import WELLS, read_plate
 POS, NEG = ["A1", "A2", "A3"], ["A4", "A5", "A6"]
 
 
-def test_linear_trace_uses_every_reading():
+def test_linear_trace_fills_the_longest_window():
     a = 0.3 + 0.001 * T
     f = fit_initial_rate(T, a)
-    assert f["status"] == "ok" and f["stopped_by"] == "end_of_trace"
-    assert f["n_points"] == len(T) and f["slope"] == pytest.approx(0.001)
+    assert f["status"] == "ok" and f["stopped_by"] == "max_window"
+    assert f["n_points"] == 2 * FitSettings().min_points
+    assert f["slope"] == pytest.approx(0.001)
+
+
+def test_window_ends_with_a_trace_shorter_than_the_longest_window():
+    a = 0.3 + 0.001 * T
+    a[8] = np.nan
+    f = fit_initial_rate(T, a)
+    assert f["stopped_by"] == "end_of_trace" and f["idx"] == tuple(range(8))
+
+
+def test_rolling_window_finds_the_linear_phase_after_a_lag():
+    a = 0.3 + 0.001 * np.clip(T - T[30], 0, None)
+    f = fit_initial_rate(T, a)
+    assert f["status"] == "ok" and f["idx"][0] >= 30
+    assert f["slope"] == pytest.approx(0.001) and f["slope_0"] == pytest.approx(0.001)
 
 
 def test_slope_gate_stops_a_bending_trace_early():
-    a = 0.3 + 0.6 * (1 - np.exp(-0.001 * T / 0.6))
+    a = 0.3 + 0.6 * (1 - np.exp(-0.005 * T / 0.6))
     f = fit_initial_rate(T, a, FitSettings(slope_tol=0.05))
     assert f["status"] == "ok" and f["stopped_by"] == "slope_drift"
     assert f["slope"] >= 0.95 * f["slope_0"]
-    assert f["n_points"] < len(T)
+    assert f["n_points"] < 2 * FitSettings().min_points
 
 
 def test_slope_gate_holds_a_falling_trace_like_a_rising_one():
-    rise = 0.3 + 0.6 * (1 - np.exp(-0.001 * T / 0.6))
+    rise = 0.3 + 0.6 * (1 - np.exp(-0.005 * T / 0.6))
     up, down = fit_initial_rate(T, rise), fit_initial_rate(T, 1.2 - rise)
-    assert down["stopped_by"] == "slope_drift" and down["n_points"] == up["n_points"]
+    assert down["stopped_by"] == "slope_drift" and down["idx"] == up["idx"]
     assert down["slope"] == pytest.approx(-up["slope"])
 
 
@@ -116,8 +131,8 @@ def test_summaries_run(plates):
 
 
 def test_why_no_fit_names_the_check_and_a_passing_setting():
-    rng = np.random.default_rng(0)
-    noisy = 0.3 + 0.0002 * T + rng.normal(0, 0.002, len(T))
+    rng = np.random.default_rng(1)
+    noisy = 0.3 + rng.normal(0, 0.002, len(T))     # no window of 5-10 reaches R2 0.95
     s = FitSettings()
     assert fit_initial_rate(T, noisy, s)["status"] == "no_linear_fit"
     why = why_no_fit(T, noisy, s)

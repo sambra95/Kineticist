@@ -71,8 +71,8 @@ def failed_check(plate: str, j: int) -> str:
     if why["check"] == "short":
         return f"Only {why['n_available']} of {m} readings"
     if why["check"] == "flat":
-        return f"First {m} readings flat"
-    return f"R² {why['r2_0']:.3f} < {d.settings.r2_threshold:.3f}"
+        return "Readings flat"
+    return f"Best R² {why['r2_0']:.3f} < {d.settings.r2_threshold:.3f}"
 
 
 @st.fragment

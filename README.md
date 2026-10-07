@@ -30,12 +30,13 @@ fit visible and correctable by hand.
 
 For each well, least squares of A<sub>340</sub> on time:
 
-1. Fit the first 5 readings; that slope is the reference rate.
-2. Add one reading at a time while R² ≥ 0.95 **and** the rate falls no more than 5 %
-   below the reference (in the direction the trace runs, so falling traces work too).
-3. The largest window passing both gives V<sub>max</sub> (ΔA<sub>340</sub> min<sup>−1</sup>).
-4. If the first window already fails R², the well has no linear phase; its 5-point
-   slope is reported but flagged.
+1. Slide windows of 5 to 10 readings across the trace and fit each one (a rolling slope).
+2. Keep the windows with R² ≥ 0.95; the steepest of them is the reference rate (in the
+   direction the trace runs, so falling traces work too).
+3. The longest kept window whose rate is no more than 5 % below the reference gives
+   V<sub>max</sub> (ΔA<sub>340</sub> min<sup>−1</sup>).
+4. If no window passes R², the well has no linear phase; the slope of its first 5
+   readings is reported but flagged.
 
 The slope gate holds the window to the linear phase - these curves bend while
 cumulative R² stays above 0.99. Rates are normalised as
