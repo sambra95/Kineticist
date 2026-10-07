@@ -65,8 +65,8 @@ def plate_grid(plate: Plate, d: pd.DataFrame, selected: str | None = None,
 
     Each well owns a unit cell; its readings are scaled into it. Grey = reading,
     blue = used in the fit, orange = fitted rate (dashed = no linear phase).
-    Every cell carries an invisible hit target: hover for the fit, click to open.
-    ``selected`` is tinted through Plotly's own selection, which a click moves in the
+    Every cell carries an invisible hit target: hover for its plate and well, click to open.
+    ``selected`` is outlined through Plotly's own selection, which a click moves in the
     browser without the figure changing, so the chart is never rebuilt by a click.
     """
     d = d.set_index("well")
@@ -119,12 +119,16 @@ def plate_grid(plate: Plate, d: pd.DataFrame, selected: str | None = None,
                    line=dict(color=th.LINE, width=1.6)),
         go.Scatter(x=bad_l[0], y=bad_l[1], mode="lines", name="no linear phase",
                    hoverinfo="skip", opacity=.55, line=dict(color=th.LINE, width=1, dash="dash")),
-        go.Scatter(x=hx, y=hy, mode="markers", showlegend=False, customdata=wells,
-                   marker=dict(size=46, symbol="square", color="rgba(0,0,0,0)"),
-                   selectedpoints=[wells.index(selected)] if selected in wells else None,
-                   selected=dict(marker=dict(color=th.SELECTED)),
-                   unselected=dict(marker=dict(color="rgba(0,0,0,0)")),
-                   text=hover_text(order.reset_index()), hovertemplate="%{text}<extra></extra>"),
+        # One clear bar per cell: hidden until selected, then only its black edge shows.
+        go.Bar(x=hx, y=[0.94] * len(hy), base=[y - 0.47 for y in hy], width=0.94,
+               showlegend=False, customdata=wells,
+               marker=dict(color="rgba(0,0,0,0)", opacity=0,
+                           line=dict(color=th.SELECTED, width=2.5)),
+               selectedpoints=[wells.index(selected)] if selected in wells else None,
+               selected=dict(marker=dict(opacity=1)),
+               unselected=dict(marker=dict(opacity=0)),
+               text=order.label, textposition="none",
+               hovertemplate="%{text}<extra></extra>"),
     ])
     axis = dict(showgrid=False, zeroline=False, showline=False, ticks="", fixedrange=True)
     fig.update_xaxes(**axis, range=[-0.02, 12.02], side="top",

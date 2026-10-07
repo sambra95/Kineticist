@@ -7,6 +7,10 @@ fit visible and correctable by hand.
 
 ## The pages
 
+Upload the exports and set control wells and fit settings in the sidebar, then click
+**Analyse**. Sidebar changes made afterwards wait for the next click, which fits every
+well afresh and discards all manual fits.
+
 - **Fits** - each plate as a 96-well grid of progress curves: grey readings, blue
   readings used in the fit, the orange fitted rate (dashed where the well has no
   linear phase). Click a well to open it beside the grid, or step through wells

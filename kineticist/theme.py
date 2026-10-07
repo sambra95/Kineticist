@@ -43,8 +43,8 @@ FIT_SHADE = {"ok": "#D3F5DF",                  # good: an automatic linear fit
              "no_linear_fit": "#FFDCD6",       # bad: no linear phase
              "insufficient_data": "#FFDCD6",   # bad: too few readings
              "excluded": "#E6E4EC"}            # marked "no fit" by hand: no rate
-#: The open well's cell, tinted by Plotly in the browser when it is clicked.
-SELECTED = "rgba(103, 65, 217, 0.28)"
+#: The open well's cell, outlined by Plotly in the browser when it is clicked.
+SELECTED = "#000000"
 #: ...and outlined only if it is a control.
 CONTROL_EDGE = {"positive": POS, "negative": NEG}
 

@@ -82,7 +82,7 @@ def workspace() -> None:
     sub = fits[fits.plate == plate]
     by_well = sub.set_index("well")
     well = st.session_state.well
-    # The grid tints the open well through Plotly's own selection, which a click moves
+    # The grid outlines the open well through Plotly's own selection, which a click moves
     # in the browser. Redrawn from here only when the well changed some other way
     # (picker, plate, refit), the figure is untouched by a click, so the chart is never
     # rebuilt under the pointer and the next click always lands.

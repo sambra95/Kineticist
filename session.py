@@ -31,7 +31,8 @@ def init() -> None:
     st.session_state.setdefault("overrides", {})   # (plate, well) -> reading indices,
                                                    # or analysis.NO_FIT
     st.session_state.setdefault("nonce", 0)        # bumped to reset a chart's selection
-    st.session_state.setdefault("data", None)
+    st.session_state.setdefault("data", None)       # the analysis the pages show
+    st.session_state.setdefault("staged", None)     # what Analyse would run now
     st.session_state.setdefault("plate_names", {})  # uploaded file id -> plate name
 
 
@@ -85,13 +86,19 @@ def _plate_table(plates: dict[str, Plate]) -> pd.DataFrame:
                          "file": [plates[i].file for i in plates]}, index=list(plates))
 
 
-def sidebar() -> None:
-    """Uploads, plate names, control wells and fit settings -> ``session_state.data``.
+def _signature(d: Data | None) -> tuple | None:
+    """What an analysis was run on: files and their names, settings and controls."""
+    return d and (tuple(d.ids.items()), d.settings, tuple(d.pos), tuple(d.neg))
 
-    Every input is drawn on every run (a widget that is not drawn forgets its value);
-    the checks come after.
+
+def sidebar() -> None:
+    """Uploads, plate names, control wells and fit settings, applied by Analyse.
+
+    The inputs are staged in ``session_state.staged``; only the Analyse button copies
+    them to ``session_state.data``, the analysis every page shows, and in doing so
+    discards every manual fit and no-fit mark. Every input is drawn on every run (a
+    widget that is not drawn forgets its value); the checks come after.
     """
-    st.session_state.data = None
     with st.sidebar:
         files = st.file_uploader(
             "Kinetic exports", type=["xlsx"], accept_multiple_files=True,
@@ -121,7 +128,27 @@ def sidebar() -> None:
                     help="The longest window whose rate is no more than this fraction "
                          "below the steepest window's gives V-max."),
             )
+        action_slot = st.container()
 
+    st.session_state.staged = _stage(files, table_slot, settings, pos, neg)
+    staged, data = st.session_state.staged, st.session_state.data
+
+    with action_slot:
+        if st.button("Analyse", type="primary", icon=":material/play_arrow:",
+                     width="stretch", disabled=staged is None,
+                     help="Fit every well afresh with the settings above. Discards all "
+                          "manual fits and no-fit marks."):
+            st.session_state.data = data = staged
+            st.session_state.overrides = {}
+            st.session_state.nonce += 1
+        if staged is not None and _signature(staged) != _signature(data):
+            st.caption(":orange[:material/pending:] Changes not yet analysed."
+                       if data is not None else "Click Analyse to fit the plates.")
+
+
+def _stage(files, table_slot, settings: FitSettings, pos: list[str],
+           neg: list[str]) -> Data | None:
+    """The uploads, named and checked, as the next analysis; None if there is none."""
     plates, errors = {}, []
     for f in files or []:
         try:
@@ -133,7 +160,7 @@ def sidebar() -> None:
         for e in errors:
             st.error(e, icon=":material/error:")
         if not plates:
-            return
+            return None
         st.subheader("Plates", anchor=False)
         named = st.data_editor(
             _plate_table(plates), hide_index=True, disabled=["file"],
@@ -145,23 +172,26 @@ def sidebar() -> None:
         st.session_state.plate_names.update(names)
         if names.duplicated().any() or (names == "").any():
             st.error("Every plate needs its own, non-empty name.", icon=":material/error:")
-            return
+            return None
         if set(pos) & set(neg):
             st.error("A well cannot be both a positive and a negative control.",
                      icon=":material/error:")
-            return
+            return None
 
-    st.session_state.data = Data(
-        plates={names[i]: plates[i] for i in named.index},
-        ids={names[i]: i for i in named.index},
-        settings=settings, pos=pos, neg=neg)
+    return Data(plates={names[i]: plates[i] for i in named.index},
+                ids={names[i]: i for i in named.index},
+                settings=settings, pos=pos, neg=neg)
 
 
 def require() -> Data:
     """The loaded data, or a pointer to the sidebar and a stop."""
     d = st.session_state.get("data")
     if d is None:
-        st.info("Upload one or more kinetic exports (.xlsx) in the sidebar to begin.",
-                icon=":material/upload_file:")
+        if st.session_state.get("staged") is not None:
+            st.info("Click **Analyse** in the sidebar to fit the plates.",
+                    icon=":material/play_arrow:")
+        else:
+            st.info("Upload one or more kinetic exports (.xlsx) in the sidebar to begin.",
+                    icon=":material/upload_file:")
         st.stop()
     return d

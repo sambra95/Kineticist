@@ -37,7 +37,9 @@ with st.container(border=True):
     st.markdown("""
 Drop one kinetic `.xlsx` export per plate into the sidebar. Plates are named Plate 1,
 Plate 2, ... in the order they were uploaded; rename them in the sidebar's plate table.
-Control wells and the fit settings are set in the sidebar too.
+Control wells and the fit settings are set in the sidebar too. Nothing is analysed
+until you click **Analyse**: changes made in the sidebar afterwards wait for the next
+click, which fits every well afresh and discards all manual fits and no-fit marks.
 """)
 
 with st.container(border=True):
